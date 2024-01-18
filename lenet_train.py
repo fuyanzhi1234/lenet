@@ -1,61 +1,62 @@
 import paddle
-from paddle.vision.transforms import Compose, Normalize
+from paddle.vision.transforms import Compose, Normalize, Resize
 import numpy as np
 import matplotlib.pyplot as plt
 import paddle
-import paddle.nn.functional as F
+import cv2
 from paddle.metric import Accuracy
 from paddle.static import InputSpec
+import tools
+from tools import LeNet
 
-class SingleSampleDataset(paddle.io.Dataset):
-    def __init__(self, data):
-        self.data = data
-
-    def __getitem__(self, index):
-        img = np.reshape(self.images[index], [1, 28, 28])
-        return self.data
-
-    def __len__(self):
-        return 1
-
-class LeNet(paddle.nn.Layer):
-    def __init__(self):
+class MyDataset(paddle.io.Dataset):
+    def __init__(self, txt_path, transform = None):
         super().__init__()
-        self.conv1 = paddle.nn.Conv2D(in_channels=1, out_channels=6, kernel_size=5, stride=1, padding=2)
-        self.max_pool1 = paddle.nn.MaxPool2D(kernel_size=2,  stride=2)
-        self.conv2 = paddle.nn.Conv2D(in_channels=6, out_channels=16, kernel_size=5, stride=1)
-        self.max_pool2 = paddle.nn.MaxPool2D(kernel_size=2, stride=2)
-        self.linear1 = paddle.nn.Linear(in_features=16*5*5, out_features=120)
-        self.linear2 = paddle.nn.Linear(in_features=120, out_features=84)
-        self.linear3 = paddle.nn.Linear(in_features=84, out_features=10)
+        fh = open(txt_path, 'r')
+        imgs = []
+        for line in fh:
+            line = line.rstrip()
+            words = line.split()
+            imgs.append((words[0], int(words[1])))
+        self.imgs = imgs 
+        self.transform = transform
+            
+    def __getitem__(self, index):
+        imagePath, label = self.imgs[index]
+        img = cv2.imread(imagePath)
+        img = cv2.resize(img, (64, 64))
+        img = tools.saveRed(img)
+        img = img.astype('float16')
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.max_pool1(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = self.max_pool2(x)
-        x = paddle.flatten(x, start_axis=1,stop_axis=-1)
-        x = self.linear1(x)
-        x = F.relu(x)
-        x = self.linear2(x)
-        x = F.relu(x)
-        x = self.linear3(x)
-        return x
+        if self.transform is not None:
+            img = self.transform(img) 
+        return img, label
+    
+    def __len__(self):
+        return len(self.imgs)
+
 
 transform = Compose([Normalize(mean=[127.5],
                                std=[127.5],
                                data_format='CHW')])
 # 使用transform对数据集做归一化
 print('download training data and load training data')
-train_dataset = paddle.vision.datasets.MNIST(mode='train', transform=transform)
-test_dataset = paddle.vision.datasets.MNIST(mode='test', transform=transform)
+# train_dataset = paddle.vision.datasets.MNIST(mode='train', transform=transform)
+# test_dataset = paddle.vision.datasets.MNIST(mode='test', transform=transform)
+# 加载自定义数据
+train_data = MyDataset('dataset/train/train.txt', transform=transform)
+test_data = MyDataset('dataset/test/test.txt', transform=transform)
+
+#train_data 和test_data包含多有的训练与测试数据，调用DataLoader批量加载
+
+train_dataloader = paddle.io.DataLoader(dataset=train_data, batch_size=1, shuffle=True)
+test_dataloader = paddle.io.DataLoader(dataset=test_data, batch_size=1, shuffle=False)
 print('load finished')
+for i, (img, labels) in enumerate(train_dataloader): 
+    print(img, labels)
 
-
-train_data0, train_label_0 = train_dataset[0][0],train_dataset[0][1]
-train_data0 = train_data0.reshape([28,28])
+train_data0, train_label_0 = train_data[0][0],train_data[0][1]
+train_data0 = train_data0.reshape([64,64])
 plt.figure(figsize=(2,2))
 plt.imshow(train_data0, cmap=plt.cm.binary)
 print('train_data0 label is: ' + str(train_label_0))
@@ -63,6 +64,9 @@ print('train_data0 label is: ' + str(train_label_0))
 
 model = paddle.Model(LeNet())   # 用Model封装模型
 optim = paddle.optimizer.Adam(learning_rate=0.001, parameters=model.parameters())
+
+
+
 
 # 配置模型
 model.prepare(
@@ -72,13 +76,13 @@ model.prepare(
     )
 
 # 训练模型
-model.fit(train_dataset,
+model.fit(train_dataloader,
         epochs=10,
         batch_size=64,
         verbose=1
         )
 
-model.evaluate(test_dataset, batch_size=64, verbose=1)
+model.evaluate(test_dataloader, batch_size=64, verbose=1)
 
 # 保存模型参数
 model.save('model/minst')
