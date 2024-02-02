@@ -33,13 +33,13 @@ class LeNet(paddle.nn.Layer):
         return x
 
 
-def print_directory_contents(sPath):
+def print_directory_contents(sPath, label):
     for sChild in os.listdir(sPath):
         sChildPath = os.path.join(sPath,sChild)
         if os.path.isdir(sChildPath):
-            print_directory_contents(sChildPath)
+            print_directory_contents(sChildPath, label)
         else:
-            print(sChildPath + ' 1')
+            print(sChildPath + ' ' + label)
 
 
 def readTxt(txt_path):
@@ -80,14 +80,14 @@ def saveRed(image):
     mask3 = mask1 + mask2
     
     # 去除左右两边各1个像素的红色，因为开运算无法处理边缘噪声
-    # image_h, image_w = mask3.shape
-    # mask3[0:image_h, 0:1] = 0
-    # mask3[0:image_h, image_w - 1:image_w] = 0
+    image_h, image_w = mask3.shape
+    mask3[0:image_h, 0:1] = 0
+    mask3[0:image_h, image_w - 1:image_w] = 0
     
     # 获取卷积核，这里使用矩阵的方式
-    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(1, 3))
+    kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(3, 3))
     # 进行开运算,对于横着的红色噪声，1-2行，可通过卷积核（1,3）去除掉，且对老师手动坚画的红线影响较小
-    # mask3 = cv2.morphologyEx(src=mask3, op=cv2.MORPH_OPEN, kernel=kernel, iterations=1)
+    mask3 = cv2.morphologyEx(src=mask3, op=cv2.MORPH_OPEN, kernel=kernel, iterations=1)
 
     return mask3
 

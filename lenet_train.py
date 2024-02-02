@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import paddle
 import cv2
-from paddle.metric import Accuracy
+from paddle.metric import Accuracy, Precision, Recall
 from paddle.static import InputSpec
 import tools
 from tools import LeNet
@@ -23,9 +23,9 @@ class MyDataset(paddle.io.Dataset):
             
     def __getitem__(self, index):
         imagePath, label = self.imgs[index]
-        img = cv2.imread(imagePath)
+        img = cv2.imread(imagePath, cv2.IMREAD_GRAYSCALE)
         img = cv2.resize(img, (64, 64))
-        img = tools.saveRed(img)
+        # img = tools.saveRed(img)
         img = img.astype('float16')
 
         if self.transform is not None:
